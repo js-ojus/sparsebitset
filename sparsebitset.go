@@ -429,17 +429,59 @@ func (b *BitSet) Difference(c *BitSet) *BitSet {
 		return nil
 	}
 
-	res := b.Clone()
-	l := len(b.set)
+	res := new(BitSet)
+	lb := len(b.set)
 	lc := len(c.set)
-	if lc < l {
-		l = lc
+	i, j := 0, 0
+	for i < lb && j < lc {
+		bbl, cbl := b.set[i], c.set[j]
+
+		if bbl.Offset < cbl.Offset {
+			res.set = append(res.set, bbl)
+			i++
+		} else if bbl.Offset == cbl.Offset {
+			var t block
+			t.Offset = bbl.Offset
+			t.Mask = bbl.Mask &^ cbl.Mask
+			res.set = append(res.set, t)
+			i, j = i+1, j+1
+		} else {
+			j++
+		}
 	}
-	for i := 0; i < l; i++ {
-		res.set[i].Mask = b.set[i].Mask &^ c.set[i].Mask
+	for ; i < lb; i++ {
+		res.set = append(res.set, b.set[i])
 	}
+
 	res.prune()
 	return res
+}
+
+// InPlaceDifference performs a 'set minus' of the given bitset from
+// this bitset, updating this bitset itself.
+func (b *BitSet) InPlaceDifference(c *BitSet) *BitSet {
+	if c == nil {
+		return nil
+	}
+
+	lb := len(b.set)
+	lc := len(c.set)
+	i, j := 0, 0
+	for i < lb && j < lc {
+		bbl, cbl := b.set[i], c.set[j]
+
+		if bbl.Offset < cbl.Offset {
+			i++
+		} else if bbl.Offset == cbl.Offset {
+			bbl.Mask &^= cbl.Mask
+			i, j = i+1, j+1
+		} else {
+			j++
+		}
+	}
+
+	b.prune()
+	return b
 }
 
 // DifferenceCardinality answers the cardinality of the difference set
@@ -450,12 +492,237 @@ func (b *BitSet) DifferenceCardinality(c *BitSet) (uint64, error) {
 		return 0, ErrNilArgument
 	}
 
-	res := uint64(0)
-	l := len(b.set)
-	lc := len(c.set)
-	if lc < l {
-		l = lc
+	return popcountSetAndNot(b.set, c.set), nil
+}
+
+// Intersection performs a 'set intersection' of the given bitset with
+// this bitset.
+func (b *BitSet) Intersection(c *BitSet) *BitSet {
+	if c == nil {
+		return nil
 	}
-	res += popcountSetMasked(b.set[:l], c.set[:l])
-	return res, nil
+
+	res := new(BitSet)
+	lb := len(b.set)
+	lc := len(c.set)
+	i, j := 0, 0
+	for i < lb && j < lc {
+		bbl, cbl := b.set[i], c.set[j]
+
+		if bbl.Offset < cbl.Offset {
+			i++
+		} else if bbl.Offset == cbl.Offset {
+			var t block
+			t.Offset = bbl.Offset
+			t.Mask = bbl.Mask & cbl.Mask
+			res.set = append(res.set, t)
+			i, j = i+1, j+1
+		} else {
+			j++
+		}
+	}
+
+	res.prune()
+	return res
+}
+
+// InPlaceIntersection performs a 'set intersection' of the given
+// bitset with this bitset, updating this bitset itself.
+func (b *BitSet) InPlaceIntersection(c *BitSet) *BitSet {
+	if c == nil {
+		return nil
+	}
+
+	lb := len(b.set)
+	lc := len(c.set)
+	i, j := 0, 0
+	for i < lb && j < lc {
+		bbl, cbl := b.set[i], c.set[j]
+
+		if bbl.Offset < cbl.Offset {
+			bbl.Mask = 0
+			i++
+		} else if bbl.Offset == cbl.Offset {
+			bbl.Mask &= cbl.Mask
+			i, j = i+1, j+1
+		} else {
+			j++
+		}
+	}
+	for ; i < lb; i++ {
+		b.set[i].Mask = 0
+	}
+
+	b.prune()
+	return b
+}
+
+// IntersectionCardinality answers the cardinality of the intersection
+// set between this bitset and the given bitset.  This does *not*
+// construct an intermediate bitset.
+func (b *BitSet) IntersectionCardinality(c *BitSet) (uint64, error) {
+	if c == nil {
+		return 0, ErrNilArgument
+	}
+
+	return popcountSetAnd(b.set, c.set), nil
+}
+
+// Union performs a 'set union' of the given bitset with this bitset.
+func (b *BitSet) Union(c *BitSet) *BitSet {
+	if c == nil {
+		return nil
+	}
+
+	res := new(BitSet)
+	lb := len(b.set)
+	lc := len(c.set)
+	i, j := 0, 0
+	for i < lb && j < lc {
+		bbl, cbl := b.set[i], c.set[j]
+
+		if bbl.Offset < cbl.Offset {
+			res.set = append(res.set, bbl)
+			i++
+		} else if bbl.Offset == cbl.Offset {
+			var t block
+			t.Offset = bbl.Offset
+			t.Mask = bbl.Mask & cbl.Mask
+			res.set = append(res.set, t)
+			i, j = i+1, j+1
+		} else {
+			res.set = append(res.set, cbl)
+			j++
+		}
+	}
+	for ; i < lb; i++ {
+		res.set = append(res.set, b.set[i])
+	}
+	for ; j < lc; i++ {
+		res.set = append(res.set, c.set[j])
+	}
+
+	return res
+}
+
+// InPlaceUnion performs a 'set union' of the given bitset with this
+// bitset, updating this bitset itself.
+func (b *BitSet) InPlaceUnion(c *BitSet) *BitSet {
+	if c == nil {
+		return nil
+	}
+
+	lb := len(b.set)
+	lc := len(c.set)
+	i, j := 0, 0
+	for i < lb && j < lc {
+		bbl, cbl := b.set[i], c.set[j]
+
+		if bbl.Offset < cbl.Offset {
+			i++
+		} else if bbl.Offset == cbl.Offset {
+			bbl.Mask |= cbl.Mask
+			i, j = i+1, j+1
+		} else {
+			b.set.insert(cbl, uint64(i))
+			j++
+		}
+	}
+	for ; j < lc; j++ {
+		b.set.insert(c.set[j], uint64(i))
+	}
+
+	return b
+}
+
+// UnionCardinality answers the cardinality of the union set between
+// this bitset and the given bitset.  This does *not* construct an
+// intermediate bitset.
+func (b *BitSet) UnionCardinality(c *BitSet) (uint64, error) {
+	if c == nil {
+		return 0, ErrNilArgument
+	}
+
+	return popcountSetOr(b.set, c.set), nil
+}
+
+// SymmetricDifference performs a 'set symmetric difference' of the
+// given bitset with this bitset.
+func (b *BitSet) SymmetricDifference(c *BitSet) *BitSet {
+	if c == nil {
+		return nil
+	}
+
+	res := new(BitSet)
+	lb := len(b.set)
+	lc := len(c.set)
+	i, j := 0, 0
+	for i < lb && j < lc {
+		bbl, cbl := b.set[i], c.set[j]
+
+		if bbl.Offset < cbl.Offset {
+			res.set = append(res.set, bbl)
+			i++
+		} else if bbl.Offset == cbl.Offset {
+			var t block
+			t.Offset = bbl.Offset
+			t.Mask = bbl.Mask ^ cbl.Mask
+			res.set = append(res.set, t)
+			i, j = i+1, j+1
+		} else {
+			res.set = append(res.set, cbl)
+			j++
+		}
+	}
+	for ; i < lb; i++ {
+		res.set = append(res.set, b.set[i])
+	}
+	for ; j < lc; i++ {
+		res.set = append(res.set, c.set[j])
+	}
+
+	res.prune()
+	return res
+}
+
+// InPlaceSymmetricDifference performs a 'set symmetric difference' of
+// the given bitset with this bitset, updating this bitset itself.
+func (b *BitSet) InPlaceSymmetricDifference(c *BitSet) *BitSet {
+	if c == nil {
+		return nil
+	}
+
+	lb := len(b.set)
+	lc := len(c.set)
+	i, j := 0, 0
+	for i < lb && j < lc {
+		bbl, cbl := b.set[i], c.set[j]
+
+		if bbl.Offset < cbl.Offset {
+			i++
+		} else if bbl.Offset == cbl.Offset {
+			bbl.Mask ^= cbl.Mask
+			i, j = i+1, j+1
+		} else {
+			b.set.insert(cbl, uint64(i))
+			j++
+		}
+	}
+	for ; j < lc; j++ {
+		b.set.insert(c.set[j], uint64(i))
+	}
+
+	b.prune()
+	return b
+}
+
+// SymmetricDifferenceCardinality answers the cardinality of the
+// symmetric difference set between this bitset and the given bitset.
+// This does *not* construct an intermediate bitset.
+func (b *BitSet) SymmetricDifferenceCardinality(c *BitSet) (uint64, error) {
+	if c == nil {
+		return 0, ErrNilArgument
+	}
+
+	return popcountSetXor(b.set, c.set), nil
 }
