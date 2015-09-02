@@ -23,4 +23,8 @@ var (
 	// ErrItemNotFound is answered when a requested item could not be
 	// found.
 	ErrItemNotFound = errors.New("requested item not found")
+
+	// ErrNilArgument is answered when an unexpected `nil` is
+	// encountered as an argument.
+	ErrNilArgument = errors.New("nil input given")
 )
