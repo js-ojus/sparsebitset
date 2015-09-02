@@ -36,42 +36,118 @@ func popcountSet(a blockAry) uint64 {
 	return c
 }
 
-// popcountSetMasked answers the remaining number of bits set to `1`,
-// when masked with another bitset.
-func popcountSetMasked(a, other blockAry) uint64 {
+// popcountSetAndNot answers the remaining number of bits set to `1`,
+// when subtracting another bitset as specified.
+func popcountSetAndNot(a, b blockAry) uint64 {
 	c := uint64(0)
-	for i, el := range a {
-		c += popcount(el.Mask &^ other[i].Mask)
+
+	la := len(a)
+	lb := len(b)
+	i, j := 0, 0
+	for i < la && j < lb {
+		abl, bbl := a[i], b[j]
+
+		if abl.Offset < bbl.Offset {
+			c += popcount(abl.Mask)
+			i++
+		} else if abl.Offset == bbl.Offset {
+			c += popcount(abl.Mask &^ bbl.Mask)
+			i, j = i+1, j+1
+		} else {
+			j++
+		}
 	}
+	for ; i < la; i++ {
+		c += popcount(a[i].Mask)
+	}
+
 	return c
 }
 
 // popcountSetAnd answers the remaining number of bits set to `1`,
 // when `and`ed with another bitset.
-func popcountSetAnd(a, other blockAry) uint64 {
+func popcountSetAnd(a, b blockAry) uint64 {
 	c := uint64(0)
-	for i, el := range a {
-		c += popcount(el.Mask & other[i].Mask)
+
+	la := len(a)
+	lb := len(b)
+	i, j := 0, 0
+	for i < la && j < lb {
+		abl, bbl := a[i], b[j]
+
+		if abl.Offset < bbl.Offset {
+			i++
+		} else if abl.Offset == bbl.Offset {
+			c += popcount(abl.Mask & bbl.Mask)
+			i, j = i+1, j+1
+		} else {
+			j++
+		}
 	}
+
 	return c
 }
 
 // popcountSetOr answers the remaining number of bits set to `1`,
 // when inclusively `or`ed with another bitset.
-func popcountSetOr(a, other blockAry) uint64 {
+func popcountSetOr(a, b blockAry) uint64 {
 	c := uint64(0)
-	for i, el := range a {
-		c += popcount(el.Mask | other[i].Mask)
+
+	la := len(a)
+	lb := len(b)
+	i, j := 0, 0
+	for i < la && j < lb {
+		abl, bbl := a[i], b[j]
+
+		if abl.Offset < bbl.Offset {
+			c += popcount(abl.Mask)
+			i++
+		} else if abl.Offset == bbl.Offset {
+			c += popcount(abl.Mask | bbl.Mask)
+			i, j = i+1, j+1
+		} else {
+			c += popcount(bbl.Mask)
+			j++
+		}
 	}
+	for ; i < la; i++ {
+		c += popcount(a[i].Mask)
+	}
+	for ; j < lb; i++ {
+		c += popcount(b[j].Mask)
+	}
+
 	return c
 }
 
 // popcountSetXor answers the remaining number of bits set to `1`,
 // when exclusively `or`ed with another bitset.
-func popcountSetXor(a, other blockAry) uint64 {
+func popcountSetXor(a, b blockAry) uint64 {
 	c := uint64(0)
-	for i, el := range a {
-		c += popcount(el.Mask ^ other[i].Mask)
+
+	la := len(a)
+	lb := len(b)
+	i, j := 0, 0
+	for i < la && j < lb {
+		abl, bbl := a[i], b[j]
+
+		if abl.Offset < bbl.Offset {
+			c += popcount(abl.Mask)
+			i++
+		} else if abl.Offset == bbl.Offset {
+			c += popcount(abl.Mask ^ bbl.Mask)
+			i, j = i+1, j+1
+		} else {
+			c += popcount(bbl.Mask)
+			j++
+		}
 	}
+	for ; i < la; i++ {
+		c += popcount(a[i].Mask)
+	}
+	for ; j < lb; i++ {
+		c += popcount(b[j].Mask)
+	}
+
 	return c
 }
