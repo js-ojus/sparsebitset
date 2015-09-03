@@ -127,10 +127,6 @@ func (a blockAry) delete(idx uint32) (blockAry, error) {
 
 // setBit sets the bit at the given position to `1`.
 func (a blockAry) setBit(n uint64) (blockAry, error) {
-	if n == 0 {
-		return a, ErrInvalidIndex
-	}
-
 	idx := n
 	off := idx >> log2WordSize
 	bit := idx & modWordSize
@@ -143,6 +139,7 @@ func (a blockAry) setBit(n uint64) (blockAry, error) {
 		}
 		if el.Offset == off {
 			el.setBit(bit)
+			a[j] = el
 			return a, nil
 		}
 	}
@@ -155,10 +152,6 @@ func (a blockAry) setBit(n uint64) (blockAry, error) {
 
 // clearBit sets the bit at the given position to `0`.
 func (a blockAry) clearBit(n uint64) (blockAry, error) {
-	if n == 0 {
-		return a, ErrInvalidIndex
-	}
-
 	idx := n
 	off := idx >> log2WordSize
 	bit := idx & modWordSize
@@ -183,10 +176,6 @@ func (a blockAry) clearBit(n uint64) (blockAry, error) {
 
 // flipBit inverts the bit at the given position.
 func (a blockAry) flipBit(n uint64) (blockAry, error) {
-	if n == 0 {
-		return a, ErrInvalidIndex
-	}
-
 	idx := n
 	off := idx >> log2WordSize
 	bit := idx & modWordSize
@@ -240,20 +229,16 @@ type BitSet struct {
 //
 // `BitSet` is **not** thread-safe!
 func New(n uint64) *BitSet {
-	if n == 0 {
-		return nil
-	}
-
-	dens := bitDensity * float64(n)
-	if dens < 1.0 {
-		dens = 1.0
-	}
-	return &BitSet{make(blockAry, 0, uint64(dens))}
+	// dens := bitDensity * float64(n)
+	// if dens < 1.0 {
+	// 	dens = 1.0
+	// }
+	return &BitSet{make(blockAry, 0, 1)}
 }
 
 // Len answers the number of bytes used by this bitset.
 func (b *BitSet) Len() int {
-	return len(b.set) * 16
+	return len(b.set) * binary.Size(uint64(0))
 }
 
 // Test answers `true` if the bit at the given position is set;
@@ -266,7 +251,7 @@ func (b *BitSet) Test(n uint64) bool {
 func (b *BitSet) Set(n uint64) *BitSet {
 	ary, err := b.set.setBit(n)
 	if err != nil {
-		log.Println(err)
+		log.Println(err, ":", n)
 		return nil
 	}
 
@@ -318,29 +303,26 @@ func (b *BitSet) Flip(n uint64) *BitSet {
 func (b *BitSet) NextSet(n uint64) (uint64, bool) {
 	idx := n
 	off := idx >> log2WordSize
+	rsh := idx & modWordSize
 
 	i := -1
-	higher := false
 	for j, el := range b.set {
 		if el.Offset == off {
-			i = j
-			break
+			w := el.Bits >> rsh
+			if w > 0 {
+				return n + trailingZeroes64(w), true
+			}
 		}
 		if el.Offset > off {
 			i = j
-			higher = true
 			break
 		}
 	}
-	if i == -1 { // given bit is larger than the largest in the set
+	if i == -1 {
 		return 0, false
 	}
 
-	if !higher {
-		w := b.set[i].Bits >> (n & modWordSize)
-		return n + trailingZeroes64(w), true
-	}
-	return (off * wordSize) + trailingZeroes64(b.set[i].Bits), true
+	return (b.set[i].Offset * wordSize) + trailingZeroes64(b.set[i].Bits), true
 }
 
 // ClearAll resets this bitset.
@@ -353,21 +335,25 @@ func (b *BitSet) ClearAll() *BitSet {
 func (b *BitSet) Clone() *BitSet {
 	var c BitSet
 	c.set = make(blockAry, 0, len(b.set))
-	copy(c.set, b.set)
+	for _, el := range b.set {
+		c.set = append(c.set, el)
+	}
 	return &c
 }
 
 // Copy copies this bitset into the destination bitset.  It answers
 // the size of the destination bitset.
 func (b *BitSet) Copy(c *BitSet) int {
-	if c == nil || len(c.set) == 0 {
+	if c == nil {
 		return 0
 	}
-	if len(c.set)%2 == 1 { // we need to store (offset, mask) pairs
-		return -1
-	}
 
-	return copy(c.set, b.set)
+	ctr := 0
+	for _, el := range b.set {
+		c.set = append(c.set, el)
+		ctr++
+	}
+	return ctr * 2 * binary.Size(uint64(0))
 }
 
 // Count is an alias for `Cardinality`.
@@ -559,6 +545,7 @@ func (b *BitSet) InPlaceIntersection(c *BitSet) *BitSet {
 
 		case bbl.Offset == cbl.Offset:
 			bbl.Bits &= cbl.Bits
+			b.set[i] = bbl
 			i, j = i+1, j+1
 
 		default:
@@ -605,7 +592,7 @@ func (b *BitSet) Union(c *BitSet) *BitSet {
 		case bbl.Offset == cbl.Offset:
 			var t block
 			t.Offset = bbl.Offset
-			t.Bits = bbl.Bits & cbl.Bits
+			t.Bits = bbl.Bits | cbl.Bits
 			res.set = append(res.set, t)
 			i, j = i+1, j+1
 
@@ -617,7 +604,7 @@ func (b *BitSet) Union(c *BitSet) *BitSet {
 	for ; i < lb; i++ {
 		res.set = append(res.set, b.set[i])
 	}
-	for ; j < lc; i++ {
+	for ; j < lc; j++ {
 		res.set = append(res.set, c.set[j])
 	}
 
@@ -634,7 +621,11 @@ func (b *BitSet) InPlaceUnion(c *BitSet) *BitSet {
 	lb := len(b.set)
 	lc := len(c.set)
 	i, j := 0, 0
-	for i < lb && j < lc {
+	for {
+		if i >= lb || j >= lc {
+			break
+		}
+
 		bbl, cbl := b.set[i], c.set[j]
 
 		switch {
@@ -643,15 +634,17 @@ func (b *BitSet) InPlaceUnion(c *BitSet) *BitSet {
 
 		case bbl.Offset == cbl.Offset:
 			bbl.Bits |= cbl.Bits
+			b.set[i] = bbl
 			i, j = i+1, j+1
 
 		default:
 			b.set, _ = b.set.insert(cbl, uint32(i))
-			j++
+			lb++
+			i, j = i+1, j+1
 		}
 	}
 	for ; j < lc; j++ {
-		b.set, _ = b.set.insert(c.set[j], uint32(i))
+		b.set = append(b.set, c.set[j])
 	}
 
 	return b
@@ -702,7 +695,7 @@ func (b *BitSet) SymmetricDifference(c *BitSet) *BitSet {
 	for ; i < lb; i++ {
 		res.set = append(res.set, b.set[i])
 	}
-	for ; j < lc; i++ {
+	for ; j < lc; j++ {
 		res.set = append(res.set, c.set[j])
 	}
 
@@ -729,6 +722,7 @@ func (b *BitSet) InPlaceSymmetricDifference(c *BitSet) *BitSet {
 
 		case bbl.Offset == cbl.Offset:
 			bbl.Bits ^= cbl.Bits
+			b.set[i] = bbl
 			i, j = i+1, j+1
 
 		default:
@@ -737,7 +731,7 @@ func (b *BitSet) InPlaceSymmetricDifference(c *BitSet) *BitSet {
 		}
 	}
 	for ; j < lc; j++ {
-		b.set, _ = b.set.insert(c.set[j], uint32(i))
+		b.set = append(b.set, c.set[j])
 	}
 
 	b.prune()
@@ -759,6 +753,10 @@ func (b *BitSet) SymmetricDifferenceCardinality(c *BitSet) (uint64, error) {
 // highest bit set in this bitset.
 func (b *BitSet) Complement() *BitSet {
 	res := new(BitSet)
+
+	if len(b.set) == 0 {
+		return res
+	}
 
 	off := uint64(0)
 	for _, el := range b.set {

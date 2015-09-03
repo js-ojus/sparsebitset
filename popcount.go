@@ -122,7 +122,7 @@ func popcountSetOr(a, b blockAry) uint64 {
 	for ; i < la; i++ {
 		c += popcount(a[i].Bits)
 	}
-	for ; j < lb; i++ {
+	for ; j < lb; j++ {
 		c += popcount(b[j].Bits)
 	}
 
@@ -157,7 +157,7 @@ func popcountSetXor(a, b blockAry) uint64 {
 	for ; i < la; i++ {
 		c += popcount(a[i].Bits)
 	}
-	for ; j < lb; i++ {
+	for ; j < lb; j++ {
 		c += popcount(b[j].Bits)
 	}
 
