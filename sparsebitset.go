@@ -29,6 +29,9 @@ const (
 	// Number of bits to right-shift by, to divide by wordSize.
 	log2WordSize = uint64(6)
 
+	// allOnes is a word with all bits set to `1`.
+	allOnes uint64 = 0xffffffffffffffff
+
 	// Density of bits, expressed as a fraction of the total space.
 	bitDensity = 0.1
 )
@@ -47,27 +50,27 @@ func trailingZeroes64(v uint64) uint64 {
 // block is a pair of (offset, mask).
 type block struct {
 	Offset uint64
-	Mask   uint64
+	Bits   uint64
 }
 
 // setBit sets the bit at the given position.
 func (b *block) setBit(n uint64) {
-	b.Mask |= 1 << n
+	b.Bits |= 1 << n
 }
 
 // clearBit clears the bit at the given position.
 func (b *block) clearBit(n uint64) {
-	b.Mask &^= 1 << n
+	b.Bits &^= 1 << n
 }
 
 // flipBit flips the bit at the given position.
 func (b *block) flipBit(n uint64) {
-	b.Mask ^= 1 << n
+	b.Bits ^= 1 << n
 }
 
 // testBit checks to see if the bit at the given position is set.
 func (b *block) testBit(n uint64) bool {
-	return (b.Mask & (1 << n)) > 0
+	return (b.Bits & (1 << n)) > 0
 }
 
 // blockAry makes manipulation of blocks easier.  It is also
@@ -91,7 +94,7 @@ func (a blockAry) Swap(i, j int) {
 }
 
 // insert inserts the given block at the specified location.
-func (a blockAry) insert(b block, idx uint64) (blockAry, error) {
+func (a blockAry) insert(b block, idx uint32) (blockAry, error) {
 	l := len(a)
 	if int(idx) >= l {
 		a = append(a, b)
@@ -109,7 +112,7 @@ func (a blockAry) insert(b block, idx uint64) (blockAry, error) {
 }
 
 // delete removes the block at the specified location.
-func (a blockAry) delete(idx uint64) (blockAry, error) {
+func (a blockAry) delete(idx uint32) (blockAry, error) {
 	if int(idx) >= len(a) {
 		return a, ErrInvalidIndex
 	}
@@ -146,7 +149,7 @@ func (a blockAry) setBit(n uint64) (blockAry, error) {
 		i = len(a)
 	}
 
-	return a.insert(block{off, 1 << bit}, uint64(i))
+	return a.insert(block{off, 1 << bit}, uint32(i))
 }
 
 // clearBit sets the bit at the given position to `0`.
@@ -171,8 +174,8 @@ func (a blockAry) clearBit(n uint64) (blockAry, error) {
 	}
 
 	a[i].clearBit(bit)
-	if popcount(a[i].Mask) == 0 {
-		return a.delete(uint64(i))
+	if popcount(a[i].Bits) == 0 {
+		return a.delete(uint32(i))
 	}
 	return a, nil
 }
@@ -234,7 +237,7 @@ type BitSet struct {
 
 // New creates a new BitSet using the given size hint.
 //
-// BitSet is **not** thread-safe!
+// `BitSet` is **not** thread-safe!
 func New(n uint64) *BitSet {
 	if n == 0 {
 		return nil
@@ -305,7 +308,7 @@ func (b *BitSet) Flip(n uint64) *BitSet {
 // indicates the presence (`true`) or absence (`false`) of such a bit
 // in this bitset.
 //
-// Usage:
+// Example usage:
 //   for idx, ok := set.NextSet(0); ok; idx, ok = set.NextSet(idx+1) {
 //       ...
 //   }
@@ -331,12 +334,10 @@ func (b *BitSet) NextSet(n uint64) (uint64, bool) {
 	}
 
 	if !higher {
-		w := b.set[i].Mask >> (n & modWordSize)
-		if w > 0 {
-			return n + trailingZeroes64(w), true
-		}
+		w := b.set[i].Bits >> (n & modWordSize)
+		return n + trailingZeroes64(w), true
 	}
-	return (off * wordSize) + trailingZeroes64(b.set[i].Mask), true
+	return (off * wordSize) + trailingZeroes64(b.set[i].Bits), true
 }
 
 // ClearAll resets this bitset.
@@ -393,7 +394,7 @@ func (b *BitSet) Equal(c *BitSet) bool {
 
 	for i, el := range b.set {
 		cel := c.set[i]
-		if el.Offset != cel.Offset || el.Mask != cel.Mask {
+		if el.Offset != cel.Offset || el.Bits != cel.Bits {
 			return false
 		}
 	}
@@ -409,13 +410,13 @@ func (b *BitSet) prune() {
 		chg = false
 		i := -1
 		for j := resume; j < len(b.set); j++ {
-			if b.set[j].Mask == 0 {
+			if b.set[j].Bits == 0 {
 				i = j
 				break
 			}
 		}
 		if i > -1 {
-			b.set = append(b.set[:i], b.set[i+1:]...)
+			b.set, _ = b.set.delete(uint32(i))
 			chg = true
 			resume = i
 		}
@@ -436,16 +437,19 @@ func (b *BitSet) Difference(c *BitSet) *BitSet {
 	for i < lb && j < lc {
 		bbl, cbl := b.set[i], c.set[j]
 
-		if bbl.Offset < cbl.Offset {
+		switch {
+		case bbl.Offset < cbl.Offset:
 			res.set = append(res.set, bbl)
 			i++
-		} else if bbl.Offset == cbl.Offset {
+
+		case bbl.Offset == cbl.Offset:
 			var t block
 			t.Offset = bbl.Offset
-			t.Mask = bbl.Mask &^ cbl.Mask
+			t.Bits = bbl.Bits &^ cbl.Bits
 			res.set = append(res.set, t)
 			i, j = i+1, j+1
-		} else {
+
+		default:
 			j++
 		}
 	}
@@ -470,12 +474,15 @@ func (b *BitSet) InPlaceDifference(c *BitSet) *BitSet {
 	for i < lb && j < lc {
 		bbl, cbl := b.set[i], c.set[j]
 
-		if bbl.Offset < cbl.Offset {
+		switch {
+		case bbl.Offset < cbl.Offset:
 			i++
-		} else if bbl.Offset == cbl.Offset {
-			bbl.Mask &^= cbl.Mask
+
+		case bbl.Offset == cbl.Offset:
+			bbl.Bits &^= cbl.Bits
 			i, j = i+1, j+1
-		} else {
+
+		default:
 			j++
 		}
 	}
@@ -509,15 +516,18 @@ func (b *BitSet) Intersection(c *BitSet) *BitSet {
 	for i < lb && j < lc {
 		bbl, cbl := b.set[i], c.set[j]
 
-		if bbl.Offset < cbl.Offset {
+		switch {
+		case bbl.Offset < cbl.Offset:
 			i++
-		} else if bbl.Offset == cbl.Offset {
+
+		case bbl.Offset == cbl.Offset:
 			var t block
 			t.Offset = bbl.Offset
-			t.Mask = bbl.Mask & cbl.Mask
+			t.Bits = bbl.Bits & cbl.Bits
 			res.set = append(res.set, t)
 			i, j = i+1, j+1
-		} else {
+
+		default:
 			j++
 		}
 	}
@@ -539,18 +549,21 @@ func (b *BitSet) InPlaceIntersection(c *BitSet) *BitSet {
 	for i < lb && j < lc {
 		bbl, cbl := b.set[i], c.set[j]
 
-		if bbl.Offset < cbl.Offset {
-			bbl.Mask = 0
+		switch {
+		case bbl.Offset < cbl.Offset:
+			bbl.Bits = 0
 			i++
-		} else if bbl.Offset == cbl.Offset {
-			bbl.Mask &= cbl.Mask
+
+		case bbl.Offset == cbl.Offset:
+			bbl.Bits &= cbl.Bits
 			i, j = i+1, j+1
-		} else {
+
+		default:
 			j++
 		}
 	}
 	for ; i < lb; i++ {
-		b.set[i].Mask = 0
+		b.set[i].Bits = 0
 	}
 
 	b.prune()
@@ -581,16 +594,19 @@ func (b *BitSet) Union(c *BitSet) *BitSet {
 	for i < lb && j < lc {
 		bbl, cbl := b.set[i], c.set[j]
 
-		if bbl.Offset < cbl.Offset {
+		switch {
+		case bbl.Offset < cbl.Offset:
 			res.set = append(res.set, bbl)
 			i++
-		} else if bbl.Offset == cbl.Offset {
+
+		case bbl.Offset == cbl.Offset:
 			var t block
 			t.Offset = bbl.Offset
-			t.Mask = bbl.Mask & cbl.Mask
+			t.Bits = bbl.Bits & cbl.Bits
 			res.set = append(res.set, t)
 			i, j = i+1, j+1
-		} else {
+
+		default:
 			res.set = append(res.set, cbl)
 			j++
 		}
@@ -618,18 +634,21 @@ func (b *BitSet) InPlaceUnion(c *BitSet) *BitSet {
 	for i < lb && j < lc {
 		bbl, cbl := b.set[i], c.set[j]
 
-		if bbl.Offset < cbl.Offset {
+		switch {
+		case bbl.Offset < cbl.Offset:
 			i++
-		} else if bbl.Offset == cbl.Offset {
-			bbl.Mask |= cbl.Mask
+
+		case bbl.Offset == cbl.Offset:
+			bbl.Bits |= cbl.Bits
 			i, j = i+1, j+1
-		} else {
-			b.set.insert(cbl, uint64(i))
+
+		default:
+			b.set, _ = b.set.insert(cbl, uint32(i))
 			j++
 		}
 	}
 	for ; j < lc; j++ {
-		b.set.insert(c.set[j], uint64(i))
+		b.set, _ = b.set.insert(c.set[j], uint32(i))
 	}
 
 	return b
@@ -660,16 +679,19 @@ func (b *BitSet) SymmetricDifference(c *BitSet) *BitSet {
 	for i < lb && j < lc {
 		bbl, cbl := b.set[i], c.set[j]
 
-		if bbl.Offset < cbl.Offset {
+		switch {
+		case bbl.Offset < cbl.Offset:
 			res.set = append(res.set, bbl)
 			i++
-		} else if bbl.Offset == cbl.Offset {
+
+		case bbl.Offset == cbl.Offset:
 			var t block
 			t.Offset = bbl.Offset
-			t.Mask = bbl.Mask ^ cbl.Mask
+			t.Bits = bbl.Bits ^ cbl.Bits
 			res.set = append(res.set, t)
 			i, j = i+1, j+1
-		} else {
+
+		default:
 			res.set = append(res.set, cbl)
 			j++
 		}
@@ -698,18 +720,21 @@ func (b *BitSet) InPlaceSymmetricDifference(c *BitSet) *BitSet {
 	for i < lb && j < lc {
 		bbl, cbl := b.set[i], c.set[j]
 
-		if bbl.Offset < cbl.Offset {
+		switch {
+		case bbl.Offset < cbl.Offset:
 			i++
-		} else if bbl.Offset == cbl.Offset {
-			bbl.Mask ^= cbl.Mask
+
+		case bbl.Offset == cbl.Offset:
+			bbl.Bits ^= cbl.Bits
 			i, j = i+1, j+1
-		} else {
-			b.set.insert(cbl, uint64(i))
+
+		default:
+			b.set, _ = b.set.insert(cbl, uint32(i))
 			j++
 		}
 	}
 	for ; j < lc; j++ {
-		b.set.insert(c.set[j], uint64(i))
+		b.set, _ = b.set.insert(c.set[j], uint32(i))
 	}
 
 	b.prune()
@@ -725,4 +750,125 @@ func (b *BitSet) SymmetricDifferenceCardinality(c *BitSet) (uint64, error) {
 	}
 
 	return popcountSetXor(b.set, c.set), nil
+}
+
+// Complement answers a bit-wise complement of this bitset, up to the
+// highest bit set in this bitset.
+func (b *BitSet) Complement() *BitSet {
+	res := new(BitSet)
+
+	off := uint64(0)
+	for _, el := range b.set {
+		for off < el.Offset {
+			var blk block
+			blk.Offset = off
+			blk.Bits = allOnes
+			res.set = append(res.set, blk)
+
+			off += wordSize
+		}
+
+		var blk block
+		blk.Offset = el.Offset
+		blk.Bits = ^el.Bits
+		res.set = append(res.set, blk)
+
+		off += wordSize
+	}
+
+	return res
+}
+
+// All answers `true` if all the bits in it, up to its highest set
+// bit, are set to `1`; `false` otherwise.
+func (b *BitSet) All() bool {
+	lb := len(b.set)
+	if lb == 0 {
+		return true // is this correct?
+	}
+
+	off := uint64(0)
+	for _, el := range b.set[:lb-1] {
+		if el.Offset != off {
+			return false
+		}
+		if el.Bits != allOnes {
+			return false
+		}
+
+		off += wordSize
+	}
+
+	// Check the last block.
+	w := b.set[lb-1].Bits
+	c := popcount(w)
+	w = w >> c
+	if w > 0 {
+		return false
+	}
+	return true
+}
+
+// IsEmpty answers `true` if this bitset is empty; `false` otherwise.
+func (b *BitSet) IsEmpty() bool {
+	return len(b.set) == 0
+}
+
+// None is an alias for `IsEmpty`.
+func (b *BitSet) None() bool {
+	return b.IsEmpty()
+}
+
+// Any answers `true` iff this bitset is not empty.
+func (b *BitSet) Any() bool {
+	return !b.IsEmpty()
+}
+
+// IsSuperSet answers `true` if this bitset includes all of the given
+// bitset's elements.
+func (b *BitSet) IsSuperSet(c *BitSet) bool {
+	if c == nil || len(c.set) == 0 {
+		return true
+	}
+
+	n, _ := c.DifferenceCardinality(b)
+	if n > 0 {
+		return false
+	}
+	return true
+}
+
+// IsStrictSuperSet answers `true` if this bitset is a superset of the
+// given bitset, and includes at least one additional element.
+func (b *BitSet) IsStrictSuperSet(c *BitSet) bool {
+	lb := len(b.set)
+	lc := len(c.set)
+	if lb < lc {
+		return false
+	}
+
+	i, j := 0, 0
+	for i < lb && j < lc {
+		bbl := b.set[i]
+		cbl := c.set[j]
+
+		switch {
+		case bbl.Offset < cbl.Offset:
+			i++
+
+		case bbl.Offset == cbl.Offset:
+			if cbl.Bits&^bbl.Bits > 0 {
+				return false
+			}
+			i, j = i+1, j+1
+
+		default:
+			return false
+		}
+	}
+	if j < lc { // `b` got exhausted before `c`
+		return false
+	}
+
+	return true
 }

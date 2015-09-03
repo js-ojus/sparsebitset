@@ -31,7 +31,7 @@ func popcount(x uint64) (n uint64) {
 func popcountSet(a blockAry) uint64 {
 	c := uint64(0)
 	for _, el := range a {
-		c += popcount(el.Mask)
+		c += popcount(el.Bits)
 	}
 	return c
 }
@@ -47,18 +47,21 @@ func popcountSetAndNot(a, b blockAry) uint64 {
 	for i < la && j < lb {
 		abl, bbl := a[i], b[j]
 
-		if abl.Offset < bbl.Offset {
-			c += popcount(abl.Mask)
+		switch {
+		case abl.Offset < bbl.Offset:
+			c += popcount(abl.Bits)
 			i++
-		} else if abl.Offset == bbl.Offset {
-			c += popcount(abl.Mask &^ bbl.Mask)
+
+		case abl.Offset == bbl.Offset:
+			c += popcount(abl.Bits &^ bbl.Bits)
 			i, j = i+1, j+1
-		} else {
+
+		default:
 			j++
 		}
 	}
 	for ; i < la; i++ {
-		c += popcount(a[i].Mask)
+		c += popcount(a[i].Bits)
 	}
 
 	return c
@@ -75,12 +78,15 @@ func popcountSetAnd(a, b blockAry) uint64 {
 	for i < la && j < lb {
 		abl, bbl := a[i], b[j]
 
-		if abl.Offset < bbl.Offset {
+		switch {
+		case abl.Offset < bbl.Offset:
 			i++
-		} else if abl.Offset == bbl.Offset {
-			c += popcount(abl.Mask & bbl.Mask)
+
+		case abl.Offset == bbl.Offset:
+			c += popcount(abl.Bits & bbl.Bits)
 			i, j = i+1, j+1
-		} else {
+
+		default:
 			j++
 		}
 	}
@@ -99,22 +105,25 @@ func popcountSetOr(a, b blockAry) uint64 {
 	for i < la && j < lb {
 		abl, bbl := a[i], b[j]
 
-		if abl.Offset < bbl.Offset {
-			c += popcount(abl.Mask)
+		switch {
+		case abl.Offset < bbl.Offset:
+			c += popcount(abl.Bits)
 			i++
-		} else if abl.Offset == bbl.Offset {
-			c += popcount(abl.Mask | bbl.Mask)
+
+		case abl.Offset == bbl.Offset:
+			c += popcount(abl.Bits | bbl.Bits)
 			i, j = i+1, j+1
-		} else {
-			c += popcount(bbl.Mask)
+
+		default:
+			c += popcount(bbl.Bits)
 			j++
 		}
 	}
 	for ; i < la; i++ {
-		c += popcount(a[i].Mask)
+		c += popcount(a[i].Bits)
 	}
 	for ; j < lb; i++ {
-		c += popcount(b[j].Mask)
+		c += popcount(b[j].Bits)
 	}
 
 	return c
@@ -131,22 +140,25 @@ func popcountSetXor(a, b blockAry) uint64 {
 	for i < la && j < lb {
 		abl, bbl := a[i], b[j]
 
-		if abl.Offset < bbl.Offset {
-			c += popcount(abl.Mask)
+		switch {
+		case abl.Offset < bbl.Offset:
+			c += popcount(abl.Bits)
 			i++
-		} else if abl.Offset == bbl.Offset {
-			c += popcount(abl.Mask ^ bbl.Mask)
+
+		case abl.Offset == bbl.Offset:
+			c += popcount(abl.Bits ^ bbl.Bits)
 			i, j = i+1, j+1
-		} else {
-			c += popcount(bbl.Mask)
+
+		default:
+			c += popcount(bbl.Bits)
 			j++
 		}
 	}
 	for ; i < la; i++ {
-		c += popcount(a[i].Mask)
+		c += popcount(a[i].Bits)
 	}
 	for ; j < lb; i++ {
-		c += popcount(b[j].Mask)
+		c += popcount(b[j].Bits)
 	}
 
 	return c
