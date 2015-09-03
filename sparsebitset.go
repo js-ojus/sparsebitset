@@ -15,8 +15,9 @@
 package sparsebitset
 
 import (
+	"encoding/binary"
+	"io"
 	"log"
-	"math"
 )
 
 const (
@@ -244,7 +245,9 @@ func New(n uint64) *BitSet {
 	}
 
 	dens := bitDensity * float64(n)
-	dens = math.Min(1.0, dens)
+	if dens < 1.0 {
+		dens = 1.0
+	}
 	return &BitSet{make(blockAry, 0, uint64(dens))}
 }
 
@@ -871,4 +874,55 @@ func (b *BitSet) IsStrictSuperSet(c *BitSet) bool {
 	}
 
 	return true
+}
+
+// BinaryStorageSize answers the number of bytes that will be needed
+// to serialise this bitset.
+func (b *BitSet) BinaryStorageSize() int {
+	return binary.Size(uint32(0)) + binary.Size(b.set)
+}
+
+// WriteTo serialises this bitset to the given `io.Writer`.
+func (b *BitSet) WriteTo(w io.Writer) (int64, error) {
+	var err error
+
+	// Write length of the data to follow.
+	lb := len(b.set)
+	lb *= 2 * binary.Size(uint64(0))
+	err = binary.Write(w, binary.BigEndian, uint32(lb))
+	if err != nil {
+		return 0, err
+	}
+
+	err = binary.Write(w, binary.BigEndian, b.set)
+	if err != nil {
+		return int64(binary.Size(uint32(0))), err
+	}
+
+	return int64(b.BinaryStorageSize()), nil
+}
+
+// ReadFrom de-serialises the data from the given `io.Reader` stream
+// into this bitset.
+//
+// N.B. This method overwrites the data currently in this bitset.
+func (b *BitSet) ReadFrom(r io.Reader) (int64, error) {
+	var err error
+
+	// Read length of the data that follows.
+	var lb uint32
+	err = binary.Read(r, binary.BigEndian, &lb)
+	if err != nil {
+		return 0, err
+	}
+
+	n := int(lb) / (2 * binary.Size(uint64(0)))
+	set := make(blockAry, 0, n)
+	err = binary.Read(r, binary.BigEndian, &set)
+	if err != nil {
+		return int64(binary.Size(uint32(0))), err
+	}
+
+	b.set = set
+	return int64(b.BinaryStorageSize()), nil
 }
