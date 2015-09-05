@@ -14,7 +14,7 @@
    limitations under the License.
 -->
 
-[![Build Status](https://travis-ci.org/js-ojus/sparsebitset.svg?branch=master)](https://travis-ci.org/js-ojus/sparsebitset)
+[![Build Status](https://travis-ci.org/js-ojus/sparsebitset.svg?branch=master)](https://travis-ci.org/js-ojus/sparsebitset) [![GoDoc](https://godoc.org/github.com/js-ojus/sparsebitset?status.svg)](https://godoc.org/github.com/js-ojus/sparsebitset)
 
 ### `sparsebitset`
 A simple implementation of sparse bitsets for non-negative integers.
