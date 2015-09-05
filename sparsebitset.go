@@ -12,6 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package sparsebitset is a simple implementation of sparse bitsets
+// for non-negative integers.
+//
+// The representation is very simple, and uses a sequence of (offset,
+// bits) pairs.  It is similar to that of Go's
+// `x/tools/container/intsets` and Java's `java.util.BitSet`.
+// However, Go's package caters to negative integers as well, which I
+// do not need.
+//
+// The original motivation for `sparsebitset` comes from a need to
+// store custom indexes of documents in a database.  Accordingly,
+// `sparsebitset` trades CPU time for space.
 package sparsebitset
 
 import (
