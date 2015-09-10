@@ -480,8 +480,7 @@ func (b *BitSet) InPlaceDifference(c *BitSet) *BitSet {
 			i++
 
 		case bbl.Offset == cbl.Offset:
-			bbl.Bits &^= cbl.Bits
-			b.set[i] = bbl
+			b.set[i].Bits &^= cbl.Bits
 			i, j = i+1, j+1
 
 		default:
@@ -557,8 +556,7 @@ func (b *BitSet) InPlaceIntersection(c *BitSet) *BitSet {
 			i++
 
 		case bbl.Offset == cbl.Offset:
-			bbl.Bits &= cbl.Bits
-			b.set[i] = bbl
+			b.set[i].Bits &= cbl.Bits
 			i, j = i+1, j+1
 
 		default:
@@ -646,8 +644,7 @@ func (b *BitSet) InPlaceUnion(c *BitSet) *BitSet {
 			i++
 
 		case bbl.Offset == cbl.Offset:
-			bbl.Bits |= cbl.Bits
-			b.set[i] = bbl
+			b.set[i].Bits |= cbl.Bits
 			i, j = i+1, j+1
 
 		default:
@@ -734,8 +731,7 @@ func (b *BitSet) InPlaceSymmetricDifference(c *BitSet) *BitSet {
 			i++
 
 		case bbl.Offset == cbl.Offset:
-			bbl.Bits ^= cbl.Bits
-			b.set[i] = bbl
+			b.set[i].Bits ^= cbl.Bits
 			i, j = i+1, j+1
 
 		default:
