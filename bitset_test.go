@@ -557,6 +557,11 @@ func TestInPlaceDifference(t *testing.T) {
 	c.InPlaceDifference(b)
 	d := b.Clone()
 	d.InPlaceDifference(a)
+	e := a.Clone()
+	for i := uint64(0); i < 100; i += 2 {
+		e.Set(i)
+	}
+	e.InPlaceDifference(b)
 	if c.Count() != 50 {
 		t.Errorf("a-b Difference should have 50 bits set, but had %d", c.Count())
 	}
@@ -565,6 +570,9 @@ func TestInPlaceDifference(t *testing.T) {
 	}
 	if c.Equal(d) {
 		t.Errorf("Difference, here, should not be symmetric")
+	}
+	if e.Count() != 50 {
+		t.Errorf("e-b Difference should have 50 bits set, but had %d", e.Count())
 	}
 }
 

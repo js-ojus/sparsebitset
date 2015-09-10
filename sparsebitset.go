@@ -481,6 +481,7 @@ func (b *BitSet) InPlaceDifference(c *BitSet) *BitSet {
 
 		case bbl.Offset == cbl.Offset:
 			bbl.Bits &^= cbl.Bits
+			b.set[i] = bbl
 			i, j = i+1, j+1
 
 		default:
