@@ -500,6 +500,12 @@ func TestInplaceIntersection(t *testing.T) {
 	c.InPlaceIntersection(b)
 	d := b.Clone()
 	d.InPlaceIntersection(a)
+	e := New(100)
+	for i := uint64(76); i < 100; i++ {
+		e.Set(i)
+	}
+	f := a.Clone()
+	f.InPlaceIntersection(e)
 	if c.Count() != 50 {
 		t.Errorf("Intersection should have 50 bits set, but had %d", c.Count())
 	}
@@ -508,6 +514,9 @@ func TestInplaceIntersection(t *testing.T) {
 	}
 	if !c.Equal(d) {
 		t.Errorf("Intersection should be symmetric")
+	}
+	if f.Count() != 12 {
+		t.Errorf("Intersection should have 12 bits set, but had %d", f.Count())
 	}
 }
 

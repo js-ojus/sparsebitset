@@ -553,7 +553,7 @@ func (b *BitSet) InPlaceIntersection(c *BitSet) *BitSet {
 
 		switch {
 		case bbl.Offset < cbl.Offset:
-			bbl.Bits = 0
+			b.set[i].Bits = 0
 			i++
 
 		case bbl.Offset == cbl.Offset:
