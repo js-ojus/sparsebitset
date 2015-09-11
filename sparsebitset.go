@@ -786,6 +786,7 @@ func (b *BitSet) Complement() *BitSet {
 		off += wordSize
 	}
 
+	res.prune()
 	return res
 }
 
