@@ -642,23 +642,6 @@ func TestInPlaceSymmetricDifference(t *testing.T) {
 	}
 }
 
-func TestComplement(t *testing.T) {
-	a := New(500)
-	a.Set(500)
-	b := a.Complement()
-	c := b.Complement()
-	if !c.Equal(a) {
-		t.Errorf("Complement failed: complement of complement should equal original")
-	}
-	a = New(500)
-	a.Set(10).Set(20).Set(420)
-	b = a.Complement()
-	c = b.Complement()
-	if !c.Equal(a) {
-		t.Errorf("Complement failed: complement of complement should equal original")
-	}
-}
-
 func TestIsSuperSet(t *testing.T) {
 	a := New(500)
 	b := New(300)

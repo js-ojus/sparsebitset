@@ -60,6 +60,10 @@ func trailingZeroes64(v uint64) uint64 {
 	return uint64(deBruijn[((v&-v)*0x03f79d71b4ca8b09)>>58])
 }
 
+func offsetBits(n uint64) (uint64, uint64) {
+	return n >> log2WordSize, n & modWordSize
+}
+
 // block is a pair of (offset, mask).
 type block struct {
 	Offset uint64
@@ -139,9 +143,7 @@ func (a blockAry) delete(idx uint32) (blockAry, error) {
 
 // setBit sets the bit at the given position to `1`.
 func (a blockAry) setBit(n uint64) (blockAry, error) {
-	idx := n
-	off := idx >> log2WordSize
-	bit := idx & modWordSize
+	off, bit := offsetBits(n)
 
 	i := -1
 	for j, el := range a {
@@ -164,9 +166,7 @@ func (a blockAry) setBit(n uint64) (blockAry, error) {
 
 // clearBit sets the bit at the given position to `0`.
 func (a blockAry) clearBit(n uint64) (blockAry, error) {
-	idx := n
-	off := idx >> log2WordSize
-	bit := idx & modWordSize
+	off, bit := offsetBits(n)
 
 	i := -1
 	for j, el := range a {
@@ -180,7 +180,7 @@ func (a blockAry) clearBit(n uint64) (blockAry, error) {
 	}
 
 	a[i].clearBit(bit)
-	if popcount(a[i].Bits) == 0 {
+	if a[i].Bits == 0 {
 		return a.delete(uint32(i))
 	}
 	return a, nil
@@ -188,9 +188,7 @@ func (a blockAry) clearBit(n uint64) (blockAry, error) {
 
 // flipBit inverts the bit at the given position.
 func (a blockAry) flipBit(n uint64) (blockAry, error) {
-	idx := n
-	off := idx >> log2WordSize
-	bit := idx & modWordSize
+	off, bit := offsetBits(n)
 
 	i := -1
 	for j, el := range a {
@@ -214,9 +212,7 @@ func (a blockAry) testBit(n uint64) bool {
 		return false
 	}
 
-	idx := n
-	off := idx >> log2WordSize
-	bit := idx & modWordSize
+	off, bit := offsetBits(n)
 
 	i := -1
 	for j, el := range a {
@@ -313,9 +309,7 @@ func (b *BitSet) Flip(n uint64) *BitSet {
 //       ...
 //   }
 func (b *BitSet) NextSet(n uint64) (uint64, bool) {
-	idx := n
-	off := idx >> log2WordSize
-	rsh := idx & modWordSize
+	off, rsh := offsetBits(n)
 
 	i := -1
 	for j, el := range b.set {
@@ -480,7 +474,8 @@ func (b *BitSet) InPlaceDifference(c *BitSet) *BitSet {
 			i++
 
 		case bbl.Offset == cbl.Offset:
-			b.set[i].Bits &^= cbl.Bits
+			bbl.Bits &^= cbl.Bits
+			b.set[i] = bbl
 			i, j = i+1, j+1
 
 		default:
@@ -556,7 +551,8 @@ func (b *BitSet) InPlaceIntersection(c *BitSet) *BitSet {
 			i++
 
 		case bbl.Offset == cbl.Offset:
-			b.set[i].Bits &= cbl.Bits
+			bbl.Bits &= cbl.Bits
+			b.set[i] = bbl
 			i, j = i+1, j+1
 
 		default:
@@ -644,7 +640,8 @@ func (b *BitSet) InPlaceUnion(c *BitSet) *BitSet {
 			i++
 
 		case bbl.Offset == cbl.Offset:
-			b.set[i].Bits |= cbl.Bits
+			bbl.Bits |= cbl.Bits
+			b.set[i] = bbl
 			i, j = i+1, j+1
 
 		default:
@@ -731,7 +728,8 @@ func (b *BitSet) InPlaceSymmetricDifference(c *BitSet) *BitSet {
 			i++
 
 		case bbl.Offset == cbl.Offset:
-			b.set[i].Bits ^= cbl.Bits
+			bbl.Bits ^= cbl.Bits
+			b.set[i] = bbl
 			i, j = i+1, j+1
 
 		default:
@@ -760,31 +758,45 @@ func (b *BitSet) SymmetricDifferenceCardinality(c *BitSet) (uint64, error) {
 
 // Complement answers a bit-wise complement of this bitset, up to the
 // highest bit set in this bitset.
+//
+// N.B. Since bitset is not bounded, `a.complement().complement() !=
+// a`.  This limits the usefulness of this operation.  Use with care!
 func (b *BitSet) Complement() *BitSet {
 	res := new(BitSet)
 
-	if len(b.set) == 0 {
+	lb := len(b.set)
+	if lb == 0 {
 		return res
 	}
 
 	off := uint64(0)
-	for _, el := range b.set {
+	for i, el := range b.set {
 		for off < el.Offset {
-			var blk block
-			blk.Offset = off
-			blk.Bits = allOnes
-			res.set = append(res.set, blk)
-
-			off += wordSize
+			res.set = append(res.set, block{off, allOnes})
+			off++
 		}
 
-		var blk block
-		blk.Offset = el.Offset
-		blk.Bits = ^el.Bits
-		res.set = append(res.set, blk)
-
-		off += wordSize
+		if i < lb-1 {
+			res.set = append(res.set, block{el.Offset, ^el.Bits})
+			off++
+		}
 	}
+	res.set = append(res.set, b.set[lb-1])
+
+	rel := res.set[len(res.set)-1]
+	j := uint64(1)
+	for (rel.Bits >> j) > 0 {
+		j++
+	}
+	rel.Bits = rel.Bits << (64 - j)
+	rel.Bits = ^rel.Bits >> (64 - j)
+	res.set[len(res.set)-1] = rel
+
+	// '0'th bit should be ignored.
+	rel = res.set[0]
+	rel.Bits = rel.Bits >> 1
+	rel.Bits = rel.Bits << 1
+	res.set[0] = rel
 
 	res.prune()
 	return res
@@ -799,24 +811,33 @@ func (b *BitSet) All() bool {
 	}
 
 	off := uint64(0)
-	for _, el := range b.set[:lb-1] {
+	for i, el := range b.set[:lb-1] {
 		if el.Offset != off {
 			return false
 		}
-		if el.Bits != allOnes {
-			return false
+		if el.Offset > 0 && i < lb-1 {
+			if el.Bits != allOnes {
+				return false
+			}
 		}
 
-		off += wordSize
+		off++
 	}
 
-	// Check the last block.
-	w := b.set[lb-1].Bits
-	c := popcount(w)
-	w = w >> c
-	if w > 0 {
+	sel := b.set[lb-1]
+	w := uint64(0)
+	cp := popcount(sel.Bits)
+	if sel.Offset == 0 { // handle '0'th bit
+		cp++
+		w = (sel.Bits | 1) & allOnes
+	} else {
+		w = sel.Bits ^ allOnes
+	}
+	tz := trailingZeroes64(w)
+	if cp != tz {
 		return false
 	}
+
 	return true
 }
 
