@@ -36,6 +36,36 @@ func TestZeroValueBitSet(t *testing.T) {
 	}
 }
 
+func TestEmptyNone(t *testing.T) {
+	v := New(0)
+	if v.None() != true {
+		t.Errorf("Empty set should have no bits set.")
+	}
+}
+
+func TestNonEmptyNone(t *testing.T) {
+	v := New(0)
+	v.Set(1)
+	if v.None() != false {
+		t.Errorf("Non-empty set should have at least one bit set.")
+	}
+}
+
+func TestEmptyAny(t *testing.T) {
+	v := New(0)
+	if v.Any() != false {
+		t.Errorf("Empty set should have no bits set.")
+	}
+}
+
+func TestNonEmptyAny(t *testing.T) {
+	v := New(0)
+	v.Set(1)
+	if v.Any() != true {
+		t.Errorf("Non-empty set should have at least one bit set.")
+	}
+}
+
 func TestBitSetNew(t *testing.T) {
 	v := New(16)
 	if v.Test(0) != false {
@@ -97,6 +127,24 @@ func TestBitSetAndGet(t *testing.T) {
 }
 
 func TestBitSetAndGet2(t *testing.T) {
+	v := New(1000)
+	v.Set(100)
+	v.Set(1000)
+	if v.Test(100) != true {
+		t.Errorf("Bit %d is clear, and it shouldn't be.", 100)
+	}
+}
+
+func TestBitSetAndGet3(t *testing.T) {
+	v := New(1000)
+	v.Set(100)
+	v.Set(1000)
+	if v.Test(1000) != true {
+		t.Errorf("Bit %d is clear, and it shouldn't be.", 1000)
+	}
+}
+
+func TestBitSetAndGet10(t *testing.T) {
 	sz := uint64(math.MaxUint32)
 	s := New(sz)
 	s.Set(944437)
@@ -112,6 +160,158 @@ func TestBitSetAndGet2(t *testing.T) {
 	c := s.Cardinality()
 	if c != 10 {
 		t.Errorf("Cardinality is %d, but it should be %d.", c, 10)
+	}
+}
+
+func TestBitSetAndClear(t *testing.T) {
+	v := New(1000)
+	v.Set(100)
+	v.Clear(100)
+	if v.Test(100) != false {
+		t.Errorf("Bit %d is set, and it shouldn't be.", 100)
+	}
+}
+
+func TestBitSetAndClear2(t *testing.T) {
+	v := New(1000)
+	v.Set(100)
+	v.Set(1000)
+	v.Clear(100)
+	if v.Test(100) != false {
+		t.Errorf("Bit %d is set, and it shouldn't be.", 100)
+	}
+}
+
+func TestBitSetAndClear3(t *testing.T) {
+	v := New(1000)
+	v.Set(100)
+	v.Set(1000)
+	v.Clear(1000)
+	if v.Test(100) != true {
+		t.Errorf("Bit %d is clear, and it shouldn't be.", 100)
+	}
+}
+
+func TestBitSetAndClear4(t *testing.T) {
+	v := New(1000)
+	v.Set(100)
+	v.Set(1000)
+	v.Clear(100)
+	if v.Test(1000) != true {
+		t.Errorf("Bit %d is clear, and it shouldn't be.", 1000)
+	}
+}
+
+func TestBitSetAndFlip(t *testing.T) {
+	v := New(1000)
+	v.Set(100)
+	v.Flip(100)
+	if v.Test(100) != false {
+		t.Errorf("Bit %d is set, and it shouldn't be.", 100)
+	}
+}
+
+func TestBitSetAndFlip2(t *testing.T) {
+	v := New(1000)
+	v.Set(100)
+	v.Set(1000)
+	v.Flip(100)
+	if v.Test(100) != false {
+		t.Errorf("Bit %d is set, and it shouldn't be.", 100)
+	}
+}
+
+func TestBitSetAndFlip3(t *testing.T) {
+	v := New(1000)
+	v.Set(100)
+	v.Set(1000)
+	v.Flip(1000)
+	if v.Test(100) != true {
+		t.Errorf("Bit %d is clear, and it shouldn't be.", 100)
+	}
+}
+
+func TestBitSetAndFlip4(t *testing.T) {
+	v := New(1000)
+	v.Set(100)
+	v.Set(1000)
+	v.Flip(100)
+	if v.Test(1000) != true {
+		t.Errorf("Bit %d is clear, and it shouldn't be.", 1000)
+	}
+}
+
+func TestBitSetAndFlip5(t *testing.T) {
+	v := New(1000)
+	v.Set(1)
+	v.Set(100)
+	v.Set(1000)
+	v.Flip(1)
+	v.Flip(1000)
+	if v.Test(100) != true {
+		t.Errorf("Bit %d is clear, and it shouldn't be.", 100)
+	}
+}
+
+func TestBitSetAndFlip6(t *testing.T) {
+	v := New(1000)
+	v.Set(1)
+	v.Set(100)
+	v.Set(1000)
+	v.Flip(100)
+	v.Flip(1000)
+	if v.Test(1) != true {
+		t.Errorf("Bit %d is clear, and it shouldn't be.", 1)
+	}
+}
+
+func TestClearAll(t *testing.T) {
+	v := New(1000)
+	v.Set(1)
+	v.Set(100)
+	v.Set(1000)
+	v.ClearAll()
+	if v.Test(100) != false {
+		t.Errorf("Bit %d is set, and it shouldn't be.", 100)
+	}
+}
+
+func TestClone(t *testing.T) {
+	v := New(1000)
+	v.Set(1)
+	v.Set(100)
+	v.Set(1000)
+	u := v.Clone()
+	if u.Cardinality() != v.Cardinality() {
+		t.Errorf("Cloned set should have the same cardinality, but does not.")
+	}
+}
+
+func TestCloneEquality(t *testing.T) {
+	v := New(1000)
+	v.Set(1)
+	v.Set(100)
+	v.Set(1000)
+	u := v.Clone()
+	if u.Equal(v) != true {
+		t.Errorf("Cloned set should be equal to the original, but does not.")
+	}
+}
+
+func TestCloneEquality2(t *testing.T) {
+	v := New(1000)
+	v.Set(1)
+	v.Set(100)
+	v.Set(1000)
+	u := v.Clone()
+	if u.Test(1) != true {
+		t.Errorf("Cloned set should have the same bits set, but does not.")
+	}
+	if u.Test(100) != true {
+		t.Errorf("Cloned set should have the same bits set, but does not.")
+	}
+	if u.Test(1000) != true {
+		t.Errorf("Cloned set should have the same bits set, but does not.")
 	}
 }
 
