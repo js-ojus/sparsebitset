@@ -96,6 +96,25 @@ func TestBitSetAndGet(t *testing.T) {
 	}
 }
 
+func TestBitSetAndGet2(t *testing.T) {
+	sz := uint64(math.MaxUint32)
+	s := New(sz)
+	s.Set(944437)
+	s.Set(114580)
+	s.Set(115492)
+	s.Set(128289)
+	s.Set(809395)
+	s.Set(313326)
+	s.Set(343423)
+	s.Set(345148)
+	s.Set(504211)
+	s.Set(830090)
+	c := s.Cardinality()
+	if c != 10 {
+		t.Errorf("Cardinality is %d, but it should be %d.", c, 10)
+	}
+}
+
 func TestIterate(t *testing.T) {
 	v := New(10000)
 	v.Set(0)

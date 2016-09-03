@@ -120,7 +120,7 @@ func (a blockAry) insert(b block, idx uint32) (blockAry, error) {
 
 	t := make([]block, 0, l+1)
 	if idx > 0 {
-		copy(t, a[:idx])
+		t = append(t, a[:idx]...)
 	}
 	t = append(t, b)
 	t = append(t, a[idx:]...)
